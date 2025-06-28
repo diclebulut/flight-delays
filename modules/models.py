@@ -30,9 +30,10 @@ class FlightDelayPredictor:
         for col in time_columns:
             if col in self.df.columns:
 
-                self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
-                self.df[f'{col}_HOUR'] = (self.df[col].fillna(0) // 100).astype(int)
-                self.df[f'{col}_MINUTE'] = (self.df[col].fillna(0) % 100).astype(int)
+                time_series = pd.to_datetime(self.df[col], format='%H:%M', errors='coerce')
+                
+                self.df[f'{col}_HOUR'] = time_series.dt.hour.fillna(0).astype(int)
+                self.df[f'{col}_MINUTE'] = time_series.dt.minute.fillna(0).astype(int)
         
 
         self.df['DEPARTURE_DELAYED'] = (self.df['DEPARTURE_DELAY'] > 15).astype(int)

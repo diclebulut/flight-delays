@@ -22,11 +22,15 @@ class FlightDelayPredictor:
         """Clean and prepare the data for modeling"""
         print("Starting data preprocessing...")
         
+        
+        
         time_columns = ['SCHEDULED_DEPARTURE', 'DEPARTURE_TIME', 'WHEELS_OFF', 
                        'WHEELS_ON', 'SCHEDULED_ARRIVAL', 'ARRIVAL_TIME']
         
         for col in time_columns:
             if col in self.df.columns:
+
+                self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
                 self.df[f'{col}_HOUR'] = (self.df[col].fillna(0) // 100).astype(int)
                 self.df[f'{col}_MINUTE'] = (self.df[col].fillna(0) % 100).astype(int)
         

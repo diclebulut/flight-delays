@@ -5,8 +5,25 @@ airports = pd.read_csv('Inputs/airports.csv')
 flights = pd.read_csv('Inputs/flights.csv')
 
 
-flights = flights.merge(airports[['IATA_CODE', 'CITY','STATE', 'COUNTRY', 'LATITUDE', 'LONGITUDE']], left_on = 'ORIGIN_AIRPORT', right_on = 'IATA_CODE', how='left', suffixes=('', '_dep') )
-flights = flights.merge(airports[['IATA_CODE', 'CITY','STATE', 'COUNTRY', 'LATITUDE', 'LONGITUDE']], left_on = 'DESTINATION_AIRPORT', right_on = 'IATA_CODE', how='left', suffixes=('', '_arr') )
+flights = flights.merge(airports[['IATA_CODE', 'CITY','STATE', 'COUNTRY', 'LATITUDE', 'LONGITUDE']], left_on = 'ORIGIN_AIRPORT', right_on = 'IATA_CODE', how='left')
+flights = flights.rename(columns={
+    'IATA_CODE': 'IATA_CODE_dep',
+    'CITY': 'CITY_dep',
+    'STATE': 'STATE_dep',
+    'COUNTRY': 'COUNTRY_dep',
+    'LATITUDE': 'LATITUDE_dep',
+    'LONGITUDE': 'LONGITUDE_dep'
+})
+flights = flights.merge(airports[['IATA_CODE', 'CITY','STATE', 'COUNTRY', 'LATITUDE', 'LONGITUDE']], left_on = 'DESTINATION_AIRPORT', right_on = 'IATA_CODE', how='left')
+
+flights = flights.rename(columns={
+    'IATA_CODE': 'IATA_CODE_arr',
+    'CITY': 'CITY_arr',
+    'STATE': 'STATE_arr',
+    'COUNTRY': 'COUNTRY_arr',
+    'LATITUDE': 'LATITUDE_arr',
+    'LONGITUDE': 'LONGITUDE_arr'
+})
 
 def hhmm_to_time(time_float):
     if pd.isna(time_float):

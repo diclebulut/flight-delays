@@ -1,13 +1,11 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
-import matplotlib.pyplot as plt
-import seaborn as sns
-from datetime import datetime
+import time
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -133,7 +131,7 @@ class FlightDelayPredictor:
 
         models_to_try = {
             'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000),
-            'Random Forest': RandomForestClassifier(random_state=42, n_estimators=100),
+            'Random Forest': RandomForestClassifier(random_state=42, n_estimators=100, n_jobs=3),
             'Gradient Boosting': GradientBoostingClassifier(random_state=42, n_estimators=100)
         }
         
@@ -141,6 +139,7 @@ class FlightDelayPredictor:
         
         for name, model in models_to_try.items():
             print(f"\nTraining {name}...")
+            start = time.time()
             
             if name == 'Logistic Regression':
                 model.fit(X_train_scaled, y_train)
@@ -150,6 +149,9 @@ class FlightDelayPredictor:
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
                 y_pred_proba = model.predict_proba(X_test)[:, 1]
+
+            duration = time.time() - start
+            print(f'Model took {duration:.2f}s to train and predict')
 
             auc_score = roc_auc_score(y_test, y_pred_proba)
             

@@ -3,6 +3,7 @@ import pandas as pd
 airlines = pd.read_csv('Inputs/airlines.csv')
 airports = pd.read_csv('Inputs/airports.csv')
 flights = pd.read_csv('Inputs/flights.csv')
+tail_numbers = pd.read_csv('Inputs/Aircraft_Tail_Numbers_and_Models_at_SFO.csv')
 
 
 flights = flights.merge(airports[['IATA_CODE', 'CITY','STATE', 'COUNTRY', 'LATITUDE', 'LONGITUDE']], left_on = 'ORIGIN_AIRPORT', right_on = 'IATA_CODE', how='left')
@@ -41,4 +42,7 @@ flights['SCHEDULED_ARRIVAL'] = flights['SCHEDULED_ARRIVAL'].apply(hhmm_to_time)
 flights['ARRIVAL_TIME'] = flights['ARRIVAL_TIME'].apply(hhmm_to_time)
 flights['WHEELS_OFF'] = flights['WHEELS_OFF'].apply(hhmm_to_time)
 flights['WHEELS_ON'] = flights['WHEELS_ON'].apply(hhmm_to_time)
+
+
+tail_numbers = tail_numbers[['Tail Number', 'Aircraft Model']]
 

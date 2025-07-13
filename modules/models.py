@@ -56,7 +56,7 @@ class FlightDelayPredictor:
                                         (self.df['IATA_CODE_arr'].isin(['JFK', 'LGA', 'DCA'])) ).astype(int)
         
         
-        categorical_cols = ['AIRLINE', 'ORIGIN_AIRPORT', 'DESTINATION_AIRPORT', 'STATE', 'STATE_arr']
+        categorical_cols = ['AIRLINE', 'ORIGIN_AIRPORT', 'DESTINATION_AIRPORT', 'STATE_dep', 'STATE_arr']
         
         for col in categorical_cols:
             if col in self.df.columns:
@@ -68,13 +68,13 @@ class FlightDelayPredictor:
         print(f"Data shape after preprocessing: {self.df_model.shape}")
         return self.df_model
     
-    def select_features(self, target='DEPARTURE_DELAYED'):
+    def select_features(self):
         
         predictive_features = [
             'MONTH', 'DAY', 'DAY_OF_WEEK', 'QUARTER', 'WEEK_OF_YEAR',
             'IS_WEEKEND', 'IS_HOLIDAY_SEASON',
-            'SCHEDULED_DEPARTURE_HOUR', 'SCHEDULED_DEPARTURE_MINUTE',
-            'SCHEDULED_ARRIVAL_HOUR', 'SCHEDULED_ARRIVAL_MINUTE',
+            'SCHEDULED_DEPARTURE_HOUR', 
+            'SCHEDULED_ARRIVAL_HOUR', 
             'IS_MORNING_RUSH', 'IS_EVENING_RUSH',
             'SCHEDULED_TIME', 'DISTANCE',
             'LATITUDE', 'LONGITUDE', 'LATITUDE_arr', 'LONGITUDE_arr'
@@ -82,7 +82,7 @@ class FlightDelayPredictor:
         
         categorical_features = [
             'AIRLINE_top', 'ORIGIN_AIRPORT_top', 'DESTINATION_AIRPORT_top',
-            'STATE_top', 'STATE_arr_top'
+            'STATE_dep_top', 'STATE_arr_top'
         ]
         
         all_features = predictive_features + categorical_features
@@ -92,7 +92,7 @@ class FlightDelayPredictor:
         print(f"Using {len(available_features)} features for prediction")
         return available_features
     
-    def prepare_model_data(self, target='DEPARTURE_DELAYED'):
+    def prepare_model_data(self, target):
         """Prepare data for machine learning models"""
         
         features = self.select_features(target)
@@ -170,6 +170,20 @@ class FlightDelayPredictor:
             
             print(f"AUC Score: {auc_score:.4f}")
             print(f"CV Score: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
+            if hasattr(model, 'feature_importances_'):
+                feature_importance = pd.DataFrame({
+                    'feature': self.feature_names,
+                    'importance': model.feature_importances_
+                }).sort_values('importance', ascending=False)
+                print("\nTop 20 Most Important Features:")
+                print(feature_importance.head(20))
+            elif hasattr(model, 'coef_'):
+                feature_importance = pd.DataFrame({
+                    'feature': self.feature_names,
+                    'importance': abs(model.coef_[0])
+                }).sort_values('importance', ascending=False)
+                print("\nTop 20 Most Important Features:")
+                print(feature_importance.head(20))
         
         self.models = results
         return results
@@ -200,8 +214,8 @@ class FlightDelayPredictor:
                 'importance': best_model['model'].feature_importances_
             }).sort_values('importance', ascending=False)
             
-            print("\nTop 10 Most Important Features:")
-            print(feature_importance.head(10))
+            print("\nTop 20 Most Important Features:")
+            print(feature_importance.head(20))
         
         return best_model_name, best_model
     

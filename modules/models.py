@@ -1,9 +1,12 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -15,7 +18,7 @@ class FlightDelayPredictor:
     def __init__(self, df):
         self.df = df.copy()
         self.models = {}
-        self.scaler = StandardScaler()
+        self.scaler = StandardScaler(with_mean=False)
         self.label_encoders = {}
         
     def preprocess_data(self):
@@ -60,7 +63,7 @@ class FlightDelayPredictor:
         
         for col in categorical_cols:
             if col in self.df.columns:
-                top_categories = self.df[col].value_counts().head(20).index
+                top_categories = self.df[col].value_counts().head(50).index
                 self.df[f'{col}_top'] = self.df[col].where(self.df[col].isin(top_categories), 'Other')
 
         self.df_model = self.df[(self.df['CANCELLED'] == 0) & (self.df['DIVERTED'] == 0)].copy()
@@ -75,8 +78,7 @@ class FlightDelayPredictor:
             'IS_WEEKEND', 'IS_HOLIDAY_SEASON',
             'SCHEDULED_DEPARTURE_HOUR', 
             'SCHEDULED_ARRIVAL_HOUR', 
-            'IS_MORNING_RUSH', 'IS_EVENING_RUSH',
-            'SCHEDULED_TIME', 'DISTANCE'
+            'IS_MORNING_RUSH', 'IS_EVENING_RUSH', 'DISTANCE'
         ]
         
         categorical_features = [
@@ -103,12 +105,32 @@ class FlightDelayPredictor:
             'MONTH','DAY_OF_WEEK', 'QUARTER','AIRLINE_top', 'ORIGIN_AIRPORT_top', 'DESTINATION_AIRPORT_top',
             'STATE_dep_top', 'STATE_arr_top', 'AIRCRAFT_MODEL_top'
         ]
-        X_encoded = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
         
-        X_encoded = X_encoded.fillna(X_encoded.median())
+        numeric_cols = [col for col in X.columns if col not in categorical_cols]
+
+
+        categorical_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='most_frequent')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+        ])
+
+        numeric_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='median'))
+        ])
+        preprocessor = ColumnTransformer(
+            transformers=[
+            ('num', numeric_transformer, numeric_cols),
+            ('cat', categorical_transformer, categorical_cols)
+        ]
+        )
+
+        X_encoded = preprocessor.fit_transform(X)
+
         
-        #X_encoded = X_encoded.select_dtypes(include=[np.number])
-        
+        num_features = numeric_cols
+        cat_features = preprocessor.named_transformers_['cat']['onehot'].get_feature_names_out(categorical_cols)
+        self.feature_names = list(num_features) + list(cat_features)
+
         print(f"Final feature matrix shape: {X_encoded.shape}")
         print(f"Target distribution: {y.value_counts().to_dict()}")
         
@@ -119,7 +141,7 @@ class FlightDelayPredictor:
         
         X, y = self.prepare_model_data(target)
         
-
+        
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42, stratify=y
         )
@@ -130,7 +152,7 @@ class FlightDelayPredictor:
 
         self.X_test = X_test_scaled
         self.y_test = y_test
-        self.feature_names = X.columns.tolist()
+       
         
 
         models_to_try = {
@@ -172,15 +194,25 @@ class FlightDelayPredictor:
             
             print(f"AUC Score: {auc_score:.4f}")
             print(f"CV Score: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
+            
+
             if hasattr(model, 'feature_importances_'):
                 feature_importance = pd.DataFrame({
                     'feature': self.feature_names,
                     'importance': model.feature_importances_
                 }).sort_values('importance', ascending=False)
-                sum_of_importance  = feature_importance['importance'].sum()
-                print("sum of importance:", sum_of_importance)
-                print("\nTop 20 Most Important Features:")
-                print(feature_importance.head(20))
+                categorical_cols = [
+                    'MONTH','DAY_OF_WEEK', 'QUARTER','AIRLINE_top', 'ORIGIN_AIRPORT_top', 'DESTINATION_AIRPORT_top',
+                    'STATE_dep_top', 'STATE_arr_top', 'AIRCRAFT_MODEL_top'
+                ]
+                feature_importance['original_column'] = feature_importance['feature'].apply(
+                lambda x: x.split('_')[0] if any(x.startswith(col + '_') for col in categorical_cols) else x
+                )
+                aggregated_importance = feature_importance.groupby('original_column')['importance'].sum().sort_values(ascending=False)
+
+                print("\nAggregated Feature Importances:")
+                print(aggregated_importance.head(20))
+
             elif hasattr(model, 'coef_'):
                 feature_importance = pd.DataFrame({
                     'feature': self.feature_names,

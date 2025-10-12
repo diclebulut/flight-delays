@@ -1,9 +1,10 @@
 import pandas as pd
+import modules.config as cfg
 
-airlines = pd.read_csv('Inputs/airlines.csv')
-airports = pd.read_csv('Inputs/airports.csv')
-flights = pd.read_csv('Inputs/flights.csv')
-tail_numbers = pd.read_csv('Inputs/Aircraft_Tail_Numbers_and_Models_at_SFO.csv')
+airlines = pd.read_csv(cfg.AIRLINES_DATA_PATH)
+airports = pd.read_csv(cfg.AIRPORTS_DATA_PATH)
+flights = pd.read_csv(cfg.FLIGHTS_DATA_PATH)
+tail_numbers = pd.read_csv(cfg.TAIL_NUMBERS_DATA_PATH)
 
 
 flights = flights.merge(airports[['IATA_CODE', 'CITY','STATE', 'COUNTRY', 'LATITUDE', 'LONGITUDE']], left_on = 'ORIGIN_AIRPORT', right_on = 'IATA_CODE', how='left')

@@ -1,5 +1,5 @@
 import pandas as pd
-import numpy as np
+import modules.config as cfg
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -8,10 +8,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
-import matplotlib.pyplot as plt
-import seaborn as sns
-from datetime import datetime
 import warnings
+import os
+import json
+from datetime import datetime
+import joblib
 warnings.filterwarnings('ignore')
 
 class FlightDelayPredictor:
@@ -27,8 +28,7 @@ class FlightDelayPredictor:
         
         
         
-        time_columns = ['SCHEDULED_DEPARTURE', 'DEPARTURE_TIME', 'WHEELS_OFF', 
-                       'WHEELS_ON', 'SCHEDULED_ARRIVAL', 'ARRIVAL_TIME']
+        time_columns = cfg.TIME_COLUMNS_TO_BE_PROCESSED
         
         for col in time_columns:
             if col in self.df.columns:
@@ -59,7 +59,7 @@ class FlightDelayPredictor:
                                         (self.df['IATA_CODE_arr'].isin(['JFK', 'LGA', 'DCA'])) ).astype(int)
         
         
-        categorical_cols = ['AIRLINE', 'ORIGIN_AIRPORT', 'DESTINATION_AIRPORT', 'STATE_dep', 'STATE_arr', 'AIRCRAFT_MODEL']
+        categorical_cols = cfg.CATEGORICAL_COLUMNS_TO_BE_PROCESSED
         
         for col in categorical_cols:
             if col in self.df.columns:
@@ -73,20 +73,11 @@ class FlightDelayPredictor:
     
     def select_features(self):
         
-        predictive_features = [
-            'DAY',  'WEEK_OF_YEAR',
-            'IS_WEEKEND', 'IS_HOLIDAY_SEASON',
-            'SCHEDULED_DEPARTURE_HOUR', 
-            'SCHEDULED_ARRIVAL_HOUR', 
-            'IS_MORNING_RUSH', 'IS_EVENING_RUSH', 'DISTANCE'
-        ]
+        non_categorical_features = cfg.NON_CATEGORICAL_FEATURES
         
-        categorical_features = [
-            'MONTH','DAY_OF_WEEK', 'QUARTER','AIRLINE_top', 'ORIGIN_AIRPORT_top', 'DESTINATION_AIRPORT_top',
-            'STATE_dep_top', 'STATE_arr_top', 'AIRCRAFT_MODEL_top'
-        ]
+        categorical_features = cfg.CATEGORICAL_FEATURES
         
-        all_features = predictive_features + categorical_features
+        all_features = non_categorical_features + categorical_features
         
         available_features = [f for f in all_features if f in self.df_model.columns]
         
@@ -101,10 +92,7 @@ class FlightDelayPredictor:
         X = self.df_model[features].copy()
         y = self.df_model[target].copy()
         
-        categorical_cols = [
-            'MONTH','DAY_OF_WEEK', 'QUARTER','AIRLINE_top', 'ORIGIN_AIRPORT_top', 'DESTINATION_AIRPORT_top',
-            'STATE_dep_top', 'STATE_arr_top', 'AIRCRAFT_MODEL_top'
-        ]
+        categorical_cols = cfg.CATEGORICAL_FEATURES
         
         numeric_cols = [col for col in X.columns if col not in categorical_cols]
 
@@ -115,7 +103,8 @@ class FlightDelayPredictor:
         ])
 
         numeric_transformer = Pipeline(steps=[
-            ('imputer', SimpleImputer(strategy='median'))
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler())
         ])
         preprocessor = ColumnTransformer(
             transformers=[
@@ -201,10 +190,7 @@ class FlightDelayPredictor:
                     'feature': self.feature_names,
                     'importance': model.feature_importances_
                 }).sort_values('importance', ascending=False)
-                categorical_cols = [
-                    'MONTH','DAY_OF_WEEK', 'QUARTER','AIRLINE_top', 'ORIGIN_AIRPORT_top', 'DESTINATION_AIRPORT_top',
-                    'STATE_dep_top', 'STATE_arr_top', 'AIRCRAFT_MODEL_top'
-                ]
+                categorical_cols = cfg.CATEGORICAL_FEATURES
                 feature_importance['original_column'] = feature_importance['feature'].apply(
                 lambda x: x.split('_')[0] if any(x.startswith(col + '_') for col in categorical_cols) else x
                 )
@@ -292,4 +278,96 @@ class FlightDelayPredictor:
         print(f"Best CV score: {grid_search.best_score_:.4f}")
         
         return grid_search.best_estimator_
+    
+
+
+        
+    def save_model(self, model_name: str, directory: str) -> None:
+        """
+        Save a specific trained model to a file.
+
+        Args:
+            model_name (str): Name of the model to save
+            directory (str): Directory where to save the model
+        """
+        if model_name not in self.models:
+            raise ValueError(f"Model {model_name} not found in trained models")
+
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"flight_delay_{model_name.lower().replace(' ', '_')}_{timestamp}.joblib"
+        filepath = os.path.join(directory, filename)
+        
+        joblib.dump(self.models[model_name]['model'], filepath)
+        print(f"{model_name} model saved to {filepath}")
+
+    def save_all_models(self, directory: str) -> None:
+        """
+        Save all trained models to files.
+
+        Args:
+            directory (str): Directory where to save the models
+        """
+        for model_name in self.models:
+            self.save_model(model_name, directory)
+
+    def log_run(self, 
+                directory: str, 
+                target: str,
+                dataset_info: dict,
+                log_filename: str = "flight_delay_model_run_log.json"
+                ) -> None:
+        """
+        Save model configuration and performance metrics to a JSON file.
+
+        Args:
+            directory (str): Directory where the JSON file will be stored
+            target (str): Target variable used for prediction
+            dataset_info (dict): Information about the dataset used
+            log_filename (str): Name of the log file
+        """
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+
+        run_info = {
+            "timestamp": datetime.now().isoformat(),
+            "target_variable": target,
+            "dataset_info": dataset_info,
+            "models": {}
+        }
+
+        #information for each model
+        for model_name, model_data in self.models.items():
+            run_info["models"][model_name] = {
+                "model_type": type(model_data['model']).__name__,
+                "parameters": model_data['model'].get_params(),
+                "metrics": {
+                    "auc_score": float(model_data['auc_score']),
+                    "cv_mean": float(model_data['cv_mean']),
+                    "cv_std": float(model_data['cv_std'])
+                }
+            }
+
+        log_file = os.path.join(directory, log_filename)
+
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, "r") as f:
+                    logs = json.load(f)
+                if not isinstance(logs, list):
+                    logs = [logs]
+            except (json.JSONDecodeError, FileNotFoundError):
+                logs = []
+        else:
+            logs = []
+
+        logs.append(run_info)
+
+        
+        with open(log_file, "w") as f:
+            json.dump(logs, f, indent=4, default=str)
+
+        print(f"Run log saved to {log_file}")
 
